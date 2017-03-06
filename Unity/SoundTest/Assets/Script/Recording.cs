@@ -55,7 +55,7 @@ public class Recording : MonoBehaviour
 
             var srcBytes = new float[clip.samples * clip.channels];
             clip.GetData(srcBytes, 0);
-            var dstBytes = TestPCMAMR(srcBytes);
+            var dstBytes = TestSpeex(srcBytes);
             clip = AudioClip.Create("MyRecordClip", dstBytes.Length, clip.channels, 8000, false);
             clip.SetData(dstBytes, 0);
             aduioSource.clip = clip;
@@ -65,11 +65,14 @@ public class Recording : MonoBehaviour
         }
     }
 
-    //public static float[] TestSpeex(float[] srcBytes)
-    //{
-
-    //}
-
+    public static float[] TestSpeex(float[] srcBytes)
+    {
+        int length = 0;
+        byte[] compressByte = NSpeexLib.SpeexCompress(srcBytes, out length);
+        float[] decompressByte = NSpeexLib.SpeexDecompress(compressByte, length);
+        return decompressByte;
+    }
+    
     public static float[] TestPCMAMR(float[] srcBytes)
     {
         // Debug.Log("压缩前字节长度:" + srcBytes.Length);
