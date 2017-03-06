@@ -5,7 +5,8 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Recording : MonoBehaviour {
+public class Recording : MonoBehaviour
+{
 
     public Button RecodeBtn;
 
@@ -14,11 +15,12 @@ public class Recording : MonoBehaviour {
     int len;
     AudioClip clip = null; // ref
                            // Use this for initialization
-    void Start () {
+    void Start()
+    {
         AJ = new AndroidJavaClass("com.game.amrlib.AMRTool");
         RecodeBtn.onClick.AddListener(OnClickRecodeBtn);
         RecodeBtn.GetComponentInChildren<Text>().text = "recoding";
-      
+
     }
     private void OnApplicationFocus(bool focus)
     {
@@ -70,19 +72,19 @@ public class Recording : MonoBehaviour {
 
     public static float[] TestPCMAMR(float[] srcBytes)
     {
-       // Debug.Log("压缩前字节长度:" + srcBytes.Length);
-         short[] shortBytes = new short[srcBytes.Length];
+        // Debug.Log("压缩前字节长度:" + srcBytes.Length);
+        short[] shortBytes = new short[srcBytes.Length];
         srcBytes.ToShortArray(shortBytes);
-     //   PrintBytes("压缩前：", shortBytes);
+        //   PrintBytes("压缩前：", shortBytes);
         var compressBytes = AJ.CallStatic<byte[]>("Encoding", shortBytes);
-       // PrintBytes("压缩后：", compressBytes);
-       // Debug.Log("AMR:" + compressBytes.Length / 1024 + "kb");
+        // PrintBytes("压缩后：", compressBytes);
+        // Debug.Log("AMR:" + compressBytes.Length / 1024 + "kb");
         var unCompressData = AJ.CallStatic<short[]>("Decoding", compressBytes);
 
-     //   PrintBytes("AMR：", unCompressData);
+        //   PrintBytes("AMR：", unCompressData);
         var dstBytes = new float[unCompressData.Length];
         unCompressData.ToFloatArray(dstBytes, dstBytes.Length);
-      //  Debug.Log("压缩后字节长度:" + dstBytes.Length);
+        //  Debug.Log("压缩后字节长度:" + dstBytes.Length);
         return dstBytes;
     }
 
@@ -94,13 +96,13 @@ public class Recording : MonoBehaviour {
     {
         Debug.Log(content + BitConverter.ToString(srcbytes));
     }
-    public static void PrintBytes(string content,float[] srcbytes)
+    public static void PrintBytes(string content, float[] srcbytes)
     {
         byte[] bytes = new byte[srcbytes.Length << 2];
         System.Buffer.BlockCopy(srcbytes, 0, bytes, 0, bytes.Length);
         Debug.Log(content + BitConverter.ToString(bytes));
         //string result = srcbytes.ToString(",");
-       // Debug.Log(content + result);
+        // Debug.Log(content + result);
 
     }
     public static void PrintBytes(string content, short[] srcbytes)
@@ -125,7 +127,7 @@ public class Recording : MonoBehaviour {
         //}
         byte[] bytes = new byte[arrays.Length << 2];
         System.Buffer.BlockCopy(arrays, 0, bytes, 0, bytes.Length);
-        short[] temp = new short[bytes.Length>>1];
+        short[] temp = new short[bytes.Length >> 1];
         System.Buffer.BlockCopy(bytes, 0, temp, 0, temp.Length);
         return temp;
     }
@@ -153,7 +155,7 @@ public class Recording : MonoBehaviour {
         System.Buffer.BlockCopy(bytes, 0, temp, 0, temp.Length);
         return temp;
     }
-  
+
 }
 public static class Exstension
 {
@@ -195,7 +197,12 @@ public static class Exstension
             return null;
         }
     }
-
+    /// <summary>
+    /// 考虑为浮动点样本值的范围是 -1.0 <= Xn <= 1.0 和 signed short 是 -32767 <= Xn <= +32767
+    /// 不过，确信你你的帧都是单声道吗？如果不是这也可能音频损坏的原因，你只会复制一个通道
+    /// </summary>
+    /// <param name="input"></param>
+    /// <param name="output"></param>
     public static void ToShortArray(this float[] input, short[] output)
     {
         if (output.Length < input.Length)
