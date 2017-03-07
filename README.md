@@ -1,4 +1,4 @@
-# unity_pcm2amr
+# unity_pcm2amr,unity需求版本5.4.4f1及以上
 ##语音编码 pcm2amr and Nspeex for android in unity 
 #参考
 ##AMR编码
