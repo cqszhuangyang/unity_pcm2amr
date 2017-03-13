@@ -9,7 +9,8 @@ public class Recording : MonoBehaviour
 {
 
     public Button RecodeBtn;
-
+    int minFreq;
+    int maxFreq;
     public AudioSource aduioSource;
     static AndroidJavaClass AJ;
     int len;
@@ -17,10 +18,9 @@ public class Recording : MonoBehaviour
                            // Use this for initialization
     void Start()
     {
-        AJ = new AndroidJavaClass("com.game.amrlib.AMRTool");
+       // AJ = new AndroidJavaClass("com.game.amrlib.AMRTool");
         RecodeBtn.onClick.AddListener(OnClickRecodeBtn);
         RecodeBtn.GetComponentInChildren<Text>().text = "recoding";
-
     }
     private void OnApplicationFocus(bool focus)
     {
@@ -33,13 +33,19 @@ public class Recording : MonoBehaviour
             Debug.Log("游戏运行在前台");
         }
     }
+
     private void OnClickRecodeBtn()
     {
 
         if (RecodeBtn.GetComponentInChildren<Text>().text == "recoding")
         {
+
+
+            Microphone.GetDeviceCaps("", out minFreq, out maxFreq);
+            Debug.Log(minFreq + "," + maxFreq);
             RecordExtetion.StartRecording();
             RecodeBtn.GetComponentInChildren<Text>().text = "stop";
+            Debug.Log("recodeTime :" + NSpeexLib.speexEnc.SampleRate);
         }
         else if (RecodeBtn.GetComponentInChildren<Text>().text == "stop")
         {
@@ -47,32 +53,187 @@ public class Recording : MonoBehaviour
             RecordExtetion.EndRecording(out len, out clip);
             Debug.Log("recodeTime :" + len + " second");
             // byte[] bytes = RecordExtetion.GetData(clip);
-            RecodeBtn.GetComponentInChildren<Text>().text = "play";
+            RecodeBtn.GetComponentInChildren<Text>().text = "encodc";
         }
-        else if (RecodeBtn.GetComponentInChildren<Text>().text == "play")
+        else if (RecodeBtn.GetComponentInChildren<Text>().text == "encodc")
         {
 
 
             var srcBytes = new float[clip.samples * clip.channels];
             clip.GetData(srcBytes, 0);
-            var dstBytes = TestSpeex(srcBytes);
-            clip = AudioClip.Create("MyRecordClip", dstBytes.Length, clip.channels, 8000, false);
+            compressByte = encode(srcBytes);
+            RecodeBtn.GetComponentInChildren<Text>().text = "play";
+        }
+        else if (RecodeBtn.GetComponentInChildren<Text>().text == "play")
+        {
+            if (compressByte == null) return;
+            float[] dstBytes = decode(compressByte);
+            clip = AudioClip.Create("MyRecordClip", dstBytes.Length, clip.channels, NSpeexLib.speexEnc.SampleRate, false);
             clip.SetData(dstBytes, 0);
+
             aduioSource.clip = clip;
             aduioSource.volume = 1;
             aduioSource.Play();
+            compressByte = null;
+            RecodeBtn.GetComponentInChildren<Text>().text = "recoding";
+        }
+    }
+    static byte[] compressByte;
 
+    static byte[] encodedData = new byte[0];
+    public static float[] TestSpeex(float[] srcBytes)
+    {
+       // CoroutineManager.Add(StartEncode(srcBytes));
+       // int length = 0;
+        byte[] compressByte = encode(srcBytes);
+        //float[] decompressByte = NSpeexLib.SpeexDecompress(compressByte, length);
+        float[] decompressByte = decode(compressByte);
+        return decompressByte;
+    }
+    static int sampleSize = NSpeexLib.speexEnc.FrameSize * 10;
+    private static IEnumerator StartEncode(float[] bytes)
+    {
+        int recordFrequency = 44100;
+        int targetFrequency = 8000;
+        int targetSampleSize = 320;
+        // int sampleSize = recordFrequency / (targetFrequency / targetSampleSize); 
+        int sampleSize = 160;
+        int sampleCount = bytes.Length / sampleSize;//记录次数
+        sampleCount = bytes.Length % sampleSize > 0 ? sampleCount++ : sampleCount;
+
+        int srcLength = bytes.Length;
+
+
+        int sampleIndex = 0;
+        Debug.Log("sampleCount:" + sampleCount + ",sampleSize:" + sampleSize);
+        // int encLenCount = 0;
+        for (int index = 0; index < sampleCount; index++)
+        {
+            var tempLen = sampleSize;
+            if (sampleIndex == sampleCount - 1)
+            {
+                tempLen = (bytes.Length - sampleIndex) % sampleSize;
+                tempLen = tempLen > 0 ? tempLen : sampleSize;
+            }
+            var buff = new float[tempLen];
+            Buffer.BlockCopy(bytes, index * sampleSize, buff, 0, tempLen);
+            sampleIndex += tempLen;
+            int encLen = 0;
+            Debug.Log("pos:" + index * sampleSize + "tempLen:" + tempLen);
+            byte[] compressByte = NSpeexLib.SpeexCompress(buff, out encLen);
+            ///设置包头
+            ///
+            var temp = new byte[8];
+            Kit.setInt(temp, 0, encLen);
+            Kit.setInt(temp, 4, tempLen);
+            compressByte = Kit.getArray(compressByte, 0, encLen);
+            var packet = Kit.connectArray(temp, compressByte);
+            encodedData = Kit.connectArray(encodedData, packet);
+            yield return null;
+            //var tempLen = (bytes.Length - sampleIndex) % sampleRate;
+            //tempLen = tempLen > 0 ? tempLen : sampleRate;
+            //var buff = new float[tempLen];
+            //Buffer.BlockCopy(bytes, index * sampleRate, buff, 0, buff.Length);
+            //sampleIndex += tempLen;
+            //int encLen = 0;
+            //byte[] compressByte = NSpeexLib.SpeexCompress(buff, out encLen);
+            //encLenCount += encLen;
+            /////设置包头
+            /////
+            //compressByte = Kit.getArray(compressByte, 0, encLen);
+            //encodedData = Kit.connectArray(encodedData, compressByte);
+            //Debug.Log("包 :" + index);
         }
     }
 
-    public static float[] TestSpeex(float[] srcBytes)
+    static byte[] encode(float[] bytes)
     {
-        int length = 0;
-        byte[] compressByte = NSpeexLib.SpeexCompress(srcBytes, out length);
-        float[] decompressByte = NSpeexLib.SpeexDecompress(compressByte, length);
-        return decompressByte;
+   
+       // int sampleSize = recordFrequency / (targetFrequency / targetSampleSize); 
+        
+        int sampleCount = bytes.Length / sampleSize;//记录次数
+        sampleCount = bytes.Length % sampleSize > 0 ? sampleCount++ : sampleCount;
+
+        int srcLength = bytes.Length;
+      
+        byte[] encodedData = new byte[0];
+   
+        int sampleIndex = 0;
+        Debug.Log("sampleCount:" + sampleCount + ",sampleSize:"+ sampleSize);
+        // int encLenCount = 0;
+        for (int index = 0; index < sampleCount; index++)
+        {
+            var tempLen = sampleSize;
+            if (sampleIndex == sampleCount - 1)
+            {
+                tempLen = (bytes.Length - sampleIndex) % sampleSize;
+                tempLen = tempLen > 0 ? tempLen : sampleSize;
+            }
+            var buff = new float[tempLen];
+            Buffer.BlockCopy(bytes, index * sampleSize, buff, 0, tempLen);
+            sampleIndex += tempLen;
+            int encLen = 0;
+            
+            byte[] compressByte = NSpeexLib.SpeexCompress(buff, out encLen);
+            ///设置包头
+            ///
+            var temp = new byte[4];
+            Kit.setInt(temp,0, encLen);
+            compressByte = Kit.getArray(compressByte, 0, encLen);
+            var packet = Kit.connectArray(temp, compressByte);
+            encodedData = Kit.connectArray(encodedData, packet);
+            Debug.Log("pos:" + index * sampleSize + "tempLen:" + tempLen+ "encodedData:"+ encodedData.Length);
+            //var tempLen = (bytes.Length - sampleIndex) % sampleRate;
+            //tempLen = tempLen > 0 ? tempLen : sampleRate;
+            //var buff = new float[tempLen];
+            //Buffer.BlockCopy(bytes, index * sampleRate, buff, 0, buff.Length);
+            //sampleIndex += tempLen;
+            //int encLen = 0;
+            //byte[] compressByte = NSpeexLib.SpeexCompress(buff, out encLen);
+            //encLenCount += encLen;
+            /////设置包头
+            /////
+            //compressByte = Kit.getArray(compressByte, 0, encLen);
+            //encodedData = Kit.connectArray(encodedData, compressByte);
+            //Debug.Log("包 :" + index);
+        }
+        //var temp = new byte[8];
+        //Kit.setInt(temp, 0, encLenCount);
+        //Kit.setInt(temp, 4, srcLength);
+
+        //encodedData = Kit.connectArray(temp, encodedData);
+        return encodedData;
+    }
+
+    static float[] decode(byte[] bytes)
+    {
+        if (bytes.Length == 0) return null;
+        int postion = 0;
+        float[] decodedData = new float[0];
+        int index = 0;
+        while (postion < bytes.Length)
+        {
+
+            var encLen = Kit.getInt(bytes, postion, out postion);
+            Debug.Log("bytes.Length :" + bytes.Length + "encLen :" + encLen + "postion:" + postion);
+            var packet = Kit.getArray(bytes, postion, encLen, out postion);
+            Debug.Log("解包 :" + postion);
+            float[] compressByte = NSpeexLib.SpeexDecompress(packet, sampleSize);
+            decodedData = Kit.connectArray(compressByte, decodedData);
+            Debug.Log("解:" + decodedData.Length);
+            index++;
+        }
+        //var encLen = Kit.getInt(bytes, 0);
+
+        //var srcLen = Kit.getInt(bytes, 4);
+        //Debug.Log("解包长 :" + encLen + "原包长 :" + srcLen);
+        //int postion = 0;
+        //var packet = Kit.getArray(bytes, 8, encLen, out postion);
+        //float[] decodedData = NSpeexLib.SpeexDecompress(packet, srcLen);
+        return decodedData;
     }
     
+
     public static float[] TestPCMAMR(float[] srcBytes)
     {
         // Debug.Log("压缩前字节长度:" + srcBytes.Length);

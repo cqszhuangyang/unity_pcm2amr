@@ -103,7 +103,7 @@ public static class RecordExtetion
     public static void EndRecording(out int length, out AudioClip outClip)
     {
         int lastPos = Microphone.GetPosition(null);
-
+        Debug.Log("lastPos:" + lastPos);
         if (Microphone.IsRecording(null))
         {
             length = lastPos / samplingRate;
